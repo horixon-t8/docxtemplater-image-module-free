@@ -1,3 +1,6 @@
+Fork
+forked from [docxtemplater-image-module-free](https://github.com/evilc0des/docxtemplater-image-module-free), and updated dependencies @xmldom/xmldom, etc.
+
 Open Source docxtemplater image module
 ==========================================
 This repository holds an maintained version of docxtemplater image module.
