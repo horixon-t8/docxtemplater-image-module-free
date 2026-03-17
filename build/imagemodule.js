@@ -8245,6 +8245,15 @@ function parser(tag) {
     }
   };
 }
+function defaultWarnFn(errors) {
+  for (var _i2 = 0; _i2 < errors.length; _i2++) {
+    var error = errors[_i2];
+    if (error.message) {
+      /* eslint-disable-next-line no-console */
+      console.warn("Warning : " + error.message);
+    }
+  }
+}
 var attrToRegex = {};
 function setSingleAttribute(partValue, attr, attrValue) {
   var regex;
@@ -8306,8 +8315,8 @@ function uniq(arr) {
 }
 function chunkBy(parsed, f) {
   var chunks = [[]];
-  for (var _i2 = 0; _i2 < parsed.length; _i2++) {
-    var p = parsed[_i2];
+  for (var _i4 = 0; _i4 < parsed.length; _i4++) {
+    var p = parsed[_i4];
     var currentChunk = chunks[chunks.length - 1];
     var res = f(p);
     if (res === "start") {
@@ -8320,8 +8329,8 @@ function chunkBy(parsed, f) {
     }
   } // Remove empty chunks
   var result = [];
-  for (var _i4 = 0; _i4 < chunks.length; _i4++) {
-    var chunk = chunks[_i4];
+  for (var _i6 = 0; _i6 < chunks.length; _i6++) {
+    var chunk = chunks[_i6];
     if (chunk.length > 0) {
       result.push(chunk);
     }
@@ -8338,6 +8347,7 @@ function getDefaults() {
     },
     xmlFileNames: ["[Content_Types].xml"],
     parser: parser,
+    warnFn: defaultWarnFn,
     linebreaks: false,
     fileTypeConfig: null,
     delimiters: {
@@ -8345,7 +8355,11 @@ function getDefaults() {
       end: "}"
     },
     syntax: {
-      changeDelimiterPrefix: "="
+      changeDelimiterPrefix: "=",
+      preserveNewlinesInTags: false,
+      allowUnopenedTag: false,
+      allowUnclosedTag: false,
+      allowUnbalancedLoops: false
     }
   };
 }
@@ -8397,10 +8411,10 @@ function utf8ToWord(string) {
 // This function is written with for loops for performance
 function concatArrays(arrays) {
   var result = [];
-  for (var _i6 = 0; _i6 < arrays.length; _i6++) {
-    var array = arrays[_i6];
-    for (var _i8 = 0; _i8 < array.length; _i8++) {
-      var el = array[_i8];
+  for (var _i8 = 0; _i8 < arrays.length; _i8++) {
+    var array = arrays[_i8];
+    for (var _i0 = 0; _i0 < array.length; _i0++) {
+      var el = array[_i0];
       result.push(el);
     }
   }
@@ -8470,8 +8484,8 @@ function getRightOrNull(parsed, elements, index) {
   var level = 1;
   for (var i = index, l = parsed.length; i < l; i++) {
     var part = parsed[i];
-    for (var _i0 = 0, _elements2 = elements; _i0 < _elements2.length; _i0++) {
-      var element = _elements2[_i0];
+    for (var _i10 = 0, _elements2 = elements; _i10 < _elements2.length; _i10++) {
+      var element = _elements2[_i10];
       if (isEnding(part.value, element)) {
         level--;
       }
@@ -8504,8 +8518,8 @@ function getLeftOrNull(parsed, elements, index) {
   var level = 1;
   for (var i = index; i >= 0; i--) {
     var part = parsed[i];
-    for (var _i10 = 0, _elements4 = elements; _i10 < _elements4.length; _i10++) {
-      var element = _elements4[_i10];
+    for (var _i12 = 0, _elements4 = elements; _i12 < _elements4.length; _i12++) {
+      var element = _elements4[_i12];
       if (isStarting(part.value, element)) {
         level--;
       }
@@ -8549,26 +8563,32 @@ function isParagraphEnd(_ref6) {
     position = _ref6.position;
   return ["w:p", "a:p", "text:p"].indexOf(tag) !== -1 && type === "tag" && position === "end";
 }
-function isTextStart(_ref7) {
+function isBreakTag(_ref7) {
   var type = _ref7.type,
-    position = _ref7.position,
-    text = _ref7.text;
-  return text && type === "tag" && position === "start";
+    tag = _ref7.tag,
+    position = _ref7.position;
+  return ["w:br", "a:br"].indexOf(tag) !== -1 && type === "tag" && (position === "start" || position === "selfclosing");
 }
-function isTextEnd(_ref8) {
+function isTextStart(_ref8) {
   var type = _ref8.type,
     position = _ref8.position,
     text = _ref8.text;
+  return text && type === "tag" && position === "start";
+}
+function isTextEnd(_ref9) {
+  var type = _ref9.type,
+    position = _ref9.position,
+    text = _ref9.text;
   return text && type === "tag" && position === "end";
 }
-function isContent(_ref9) {
-  var type = _ref9.type,
-    position = _ref9.position;
+function isContent(_ref0) {
+  var type = _ref0.type,
+    position = _ref0.position;
   return type === "placeholder" || type === "content" && position === "insidetag";
 }
-function isModule(_ref0, modules) {
-  var module = _ref0.module,
-    type = _ref0.type;
+function isModule(_ref1, modules) {
+  var module = _ref1.module,
+    type = _ref1.type;
   if (!(modules instanceof Array)) {
     modules = [modules];
   }
@@ -8641,18 +8661,23 @@ function stableSort(arr, compare) {
     };
   }).sort(function (a, b) {
     return compare(a.item, b.item) || a.index - b.index;
-  }).map(function (_ref1) {
-    var item = _ref1.item;
+  }).map(function (_ref10) {
+    var item = _ref10.item;
     return item;
   });
   // Stryker restore all
 }
+function getPartWithDelimiters(part, options) {
+  return options.delimiters.start + part.raw + options.delimiters.end;
+}
 module.exports = {
+  getPartWithDelimiters: getPartWithDelimiters,
   endsWith: endsWith,
   startsWith: startsWith,
   isContent: isContent,
   isParagraphStart: isParagraphStart,
   isParagraphEnd: isParagraphEnd,
+  isBreakTag: isBreakTag,
   isTagStart: isTagStart,
   isTagEnd: isTagEnd,
   isTextStart: isTextStart,
@@ -8731,7 +8756,8 @@ var dxtOptionsSchema = z.object({
   linebreaks: z["boolean"]().optional(),
   nullGetter: z["function"]().optional(),
   syntax: dxtSyntaxSchema.optional(),
-  stripInvalidXMLChars: z["boolean"]().optional()
+  stripInvalidXMLChars: z["boolean"]().optional(),
+  warnFn: z["function"]().optional()
 }).strict();
 var _require = require("./get-relation-types.js"),
   getRelsTypes = _require.getRelsTypes;
@@ -9072,6 +9098,9 @@ var Docxtemplater = /*#__PURE__*/function () {
       if (zip.loadAsync) {
         throw new XTInternalError("Docxtemplater doesn't handle JSZip version >=3, please use pizzip");
       }
+      if (zip.xtRendered) {
+        this.options.warnFn([new Error("This zip file appears to be the outcome of a previous docxtemplater generation. This typically indicates that docxtemplater was integrated by reusing the same zip file. It is recommended to create a new Pizzip instance for each docxtemplater generation.")]);
+      }
       this.zip = zip;
       this.updateFileTypeConfig();
       this.modules = concatArrays([this.fileTypeConfig.baseModules.map(function (moduleFunction) {
@@ -9294,6 +9323,7 @@ var Docxtemplater = /*#__PURE__*/function () {
       this.hideDeprecations = true;
       var promise = this.resolveData(data);
       this.hideDeprecations = false;
+      this.zip.xtRendered = true;
       return promise.then(function () {
         return _this2.render();
       });
@@ -9301,6 +9331,7 @@ var Docxtemplater = /*#__PURE__*/function () {
   }, {
     key: "render",
     value: function render(data) {
+      this.zip.xtRendered = true;
       if (this.rendered) {
         throwRenderTwice();
       }
@@ -9417,6 +9448,20 @@ var Docxtemplater = /*#__PURE__*/function () {
     value: function getTemplatedFiles() {
       this.templatedFiles = this.fileTypeConfig.getTemplatedFiles(this.zip);
       pushArray(this.templatedFiles, this.targets);
+      var templatedNs = this.fileTypeConfig.templatedNs || [];
+      if (templatedNs.length > 0) {
+        for (var key in this.filesContentTypes) {
+          if (/^customXml\/item\d+\.xml$/.test(key)) {
+            for (var _i44 = 0; _i44 < templatedNs.length; _i44++) {
+              var ns = templatedNs[_i44];
+              var text = this.zip.file(key).asText();
+              if (text.indexOf("xmlns=\"".concat(ns, "\"")) !== -1) {
+                this.templatedFiles.push(key);
+              }
+            }
+          }
+        }
+      }
       this.templatedFiles = uniq(this.templatedFiles);
       return this.templatedFiles;
     }
@@ -9462,6 +9507,7 @@ var Docxtemplater = /*#__PURE__*/function () {
         type: "nodebuffer"
       }));
     }
+
     /* Export functions, present since 3.62.0 */
   }, {
     key: "toBlob",
@@ -9473,6 +9519,7 @@ var Docxtemplater = /*#__PURE__*/function () {
         type: "blob"
       }));
     }
+
     /* Export functions, present since 3.62.0 */
   }, {
     key: "toBase64",
@@ -9484,6 +9531,7 @@ var Docxtemplater = /*#__PURE__*/function () {
         type: "base64"
       }));
     }
+
     /* Export functions, present since 3.62.0 */
   }, {
     key: "toUint8Array",
@@ -9495,6 +9543,7 @@ var Docxtemplater = /*#__PURE__*/function () {
         type: "uint8array"
       }));
     }
+
     /* Export functions, present since 3.62.0 */
   }, {
     key: "toArrayBuffer",
@@ -9608,6 +9657,14 @@ function XTAPIVersionError(message) {
 XTAPIVersionError.prototype = new XTError();
 function throwApiVersionError(msg, properties) {
   var err = new XTAPIVersionError(msg);
+  /*
+   * This error arises when a recent module version necessitates a more
+   * current version of the docxtemplater core. Docxtemplater specifies an
+   * "APIVersion," and if a module requires API Version 3.55 or higher,
+   * but the docxtemplater instance provides API 3.52, this error will
+   * occur. To resolve this issue, please update to the latest version of
+   * docxtemplater.
+   */
   err.properties = _objectSpread({
     id: "api_version_error"
   }, properties);
@@ -9615,6 +9672,19 @@ function throwApiVersionError(msg, properties) {
 }
 function throwMultiError(errors) {
   var err = new XTTemplateError("Multi error");
+  /*
+   * This error is an Error that contains all template errors.
+   * It is a multi error because it contains all errors of the template in :
+   * err.properties.errors.
+   *
+   * You can then map on each sub error like this :
+   *
+   * ```js
+   * for (const err of error.properties.errors) {
+   *   console.log(err.properties.explanation);
+   * }
+   * ```
+   */
   err.properties = {
     errors: errors,
     id: "multi_error",
@@ -9624,58 +9694,127 @@ function throwMultiError(errors) {
 }
 function getUnopenedTagException(options) {
   var err = new XTTemplateError("Unopened tag");
+  /*
+   * This error happens if a tag is closed but not opened. For example with
+   * the following template:
+   *
+   * ```docx
+   * Hello name} !
+   * ```
+   */
   err.properties = {
     xtag: last(options.xtag.split(" ")),
     id: "unopened_tag",
     context: options.xtag,
     offset: options.offset,
     lIndex: options.lIndex,
-    explanation: "The tag beginning with \"".concat(options.xtag.substr(0, 10), "\" is unopened")
+    explanation: "The tag beginning with \"".concat(options.xtag.substr(0, 30), "\" is unopened")
   };
   return err;
 }
 function getDuplicateOpenTagException(options) {
   var err = new XTTemplateError("Duplicate open tag, expected one open tag");
+  /*
+   * This error happens with following template :
+   *
+   * ```docx
+   * Hello {{name
+   * ```
+   */
   err.properties = {
     xtag: first(options.xtag.split(" ")),
     id: "duplicate_open_tag",
     context: options.xtag,
     offset: options.offset,
     lIndex: options.lIndex,
-    explanation: "The tag beginning with \"".concat(options.xtag.substr(0, 10), "\" has duplicate open tags")
+    explanation: "The tag beginning with \"".concat(options.xtag.substr(0, 30), "\" has duplicate open tags")
   };
   return err;
 }
 function getDuplicateCloseTagException(options) {
   var err = new XTTemplateError("Duplicate close tag, expected one close tag");
+  /*
+   * This error happens with following template :
+   *
+   * ```docx
+   * Hello {name}}
+   * ```
+   */
   err.properties = {
     xtag: first(options.xtag.split(" ")),
     id: "duplicate_close_tag",
     context: options.xtag,
     offset: options.offset,
     lIndex: options.lIndex,
-    explanation: "The tag ending with \"".concat(options.xtag.substr(0, 10), "\" has duplicate close tags")
+    explanation: "The tag ending with \"".concat(options.xtag.substr(0, 30), "\" has duplicate close tags")
   };
   return err;
 }
 function getUnclosedTagException(options) {
   var err = new XTTemplateError("Unclosed tag");
+  /*
+   * This error happens if a tag is opened but not closed.
+   * For example with the following template:
+   *
+   * ```docx
+   * Hello {name !
+   * ```
+   */
   err.properties = {
     xtag: first(options.xtag.split(" ")).substr(1),
+    // name
     id: "unclosed_tag",
     context: options.xtag,
     offset: options.offset,
     lIndex: options.lIndex,
-    explanation: "The tag beginning with \"".concat(options.xtag.substr(0, 10), "\" is unclosed")
+    explanation: "The tag beginning with \"".concat(options.xtag.substr(0, 30), "\" is unclosed")
   };
   return err;
 }
 function throwXmlTagNotFound(options) {
+  if (options.position === "left") {
+    throwXmlTagNotFoundLeft(options);
+  } else {
+    throwXmlTagNotFoundRight(options);
+  }
+}
+function throwXmlTagNotFoundLeft(options) {
   var err = new XTTemplateError("No tag \"".concat(options.element, "\" was found at the ").concat(options.position));
   var part = options.parsed[options.index];
+  /*
+   * This error is not directly linked to the template, it means that some
+   * tag tried to expand to adjacent XML tags, but those elements cannot be
+   * accessed from the current node.
+   *
+   * This error happens if a rawXMLTag doesn't find a `<w:p>` element
+   *
+   * ```docx
+   * <w:p><w:t>{@raw}</w:t>
+   * // Note  that the `</w:p>` tag is missing.
+   * ```
+   */
   err.properties = {
-    id: "no_xml_tag_found_at_".concat(options.position),
-    explanation: "No tag \"".concat(options.element, "\" was found at the ").concat(options.position),
+    id: "no_xml_tag_found_at_left",
+    explanation: "No tag \"".concat(options.element, "\" was found at the left"),
+    offset: part.offset,
+    part: part,
+    parsed: options.parsed,
+    index: options.index,
+    element: options.element
+  };
+  throw err;
+}
+function throwXmlTagNotFoundRight(options) {
+  var err = new XTTemplateError("No tag \"".concat(options.element, "\" was found at the ").concat(options.position));
+  var part = options.parsed[options.index];
+  /*
+   * This error is not directly linked to the template, it means that some
+   * tag tried to expand to adjacent XML tags, but those elements cannot be
+   * accessed from the current node.
+   */
+  err.properties = {
+    id: "no_xml_tag_found_at_right",
+    explanation: "No tag \"".concat(options.element, "\" was found at the right"),
     offset: part.offset,
     part: part,
     parsed: options.parsed,
@@ -9689,26 +9828,40 @@ function getCorruptCharactersException(_ref) {
     value = _ref.value,
     offset = _ref.offset;
   var err = new XTRenderingError("There are some XML corrupt characters");
+  /*
+   * This error prevents the docx document to become corrupt.
+   * It happens if you're trying to render text that would produce invalid XML output.
+   *
+   * See #corrupt-character-error on how this can be fixed by changing your parser.
+   */
   err.properties = {
     id: "invalid_xml_characters",
     xtag: tag,
     value: value,
     offset: offset,
-    explanation: "There are some corrupt characters for the field ".concat(tag)
+    explanation: "There are some corrupt characters for the field \"".concat(tag, "\"")
   };
   return err;
 }
 function getInvalidRawXMLValueException(_ref2) {
   var tag = _ref2.tag,
     value = _ref2.value,
-    offset = _ref2.offset;
+    offset = _ref2.offset,
+    partDelims = _ref2.partDelims;
   var err = new XTRenderingError("Non string values are not allowed for rawXML tags");
+  /*
+   * This error happens if you try to render a rawXml tag, such as : {@raw}
+   * And the value of the data for "raw" is truthy but not a string.
+   *
+   * (If the value of the data is falsy, than the tag is simply dropped and
+   * no error is thrown)
+   */
   err.properties = {
     id: "invalid_raw_xml_value",
     xtag: tag,
     value: value,
     offset: offset,
-    explanation: "The value of the raw tag : '".concat(tag, "' is not a string")
+    explanation: "The value of the raw tag : \"".concat(partDelims, "\" is not a string")
   };
   return err;
 }
@@ -9726,6 +9879,10 @@ function throwExpandNotFound(options) {
   if (typeof explanation === "function") {
     explanation = explanation(part);
   }
+  /*
+   * This error happens if you try to render a rawXml tag, such as : {@raw},
+   * but that tag is not placed inside a paragraph.
+   */
   var err = new XTTemplateError(message);
   err.properties = {
     id: id,
@@ -9742,6 +9899,36 @@ function throwExpandNotFound(options) {
 function throwRawTagShouldBeOnlyTextInParagraph(options) {
   var err = new XTTemplateError("Raw tag should be the only text in paragraph");
   var tag = options.part.value;
+  /*
+   * This happens when a rawXMLTag {@raw} is not the only text in the
+   * paragraph. For example, writing ` {@raw}` (Note the spaces)
+   * is not acceptable because the {@raw} tag replaces the full paragraph. We
+   * prefer to throw an Error now rather than have "strange behavior"
+   * because the spaces "disappeared".
+   *
+   * To correct this error, you have to add manually the text that you want
+   * in your raw tag. (Or you can use the [docxtemplater word-run
+   * module](/modules/word-run/) which adds a tag
+   * that can replace rawXML inside a tag).
+   *
+   * Writing
+   *
+   * ```docx
+   * {@my_first_tag}{my_second_tag}
+   * ```
+   *
+   * Or even
+   *
+   * ```docx
+   * Hello {@my_first_tag}
+   * ```
+   *
+   * Is misusing docxtemplater.
+   *
+   * The `@` at the beginning means "replace the xml of **the
+   * current paragraph** with scope.my_first_tag" so that means that
+   * everything else in that Paragraph will be removed.
+   */
   err.properties = {
     id: "raw_xml_tag_should_be_only_text_in_paragraph",
     explanation: "The raw tag \"".concat(tag, "\" should be the only text in this paragraph. This means that this tag should not be surrounded by any text or spaces."),
@@ -9759,6 +9946,14 @@ function getUnmatchedLoopException(part) {
   var T = location === "start" ? "Unclosed" : "Unopened";
   var err = new XTTemplateError("".concat(T, " loop"));
   var tag = part.value;
+  /*
+   * This error happens with following template :
+   *
+   * ```docx
+   * {#users}
+   * {/companies}
+   * ```
+   */
   err.properties = {
     id: "".concat(t, "_loop"),
     explanation: "The loop with tag \"".concat(tag, "\" is ").concat(t),
@@ -9776,6 +9971,25 @@ function getUnbalancedLoopException(pair, lastPair) {
   var lastR = lastPair[1].part.value;
   var l = pair[0].part.value;
   var r = pair[1].part.value;
+  /*
+   * This error happens if you create a table and misplace tags inside the table :
+   *
+   * ```docx-md
+   * | Head1    | Head2         |
+   * | -------- | ------------  |
+   * | {#a}X    | {/a}{#b}Y{/b} |
+   * ```
+   *
+   *  In the case above, the {#a} and {/a} will expand to the whole loop, but this is not possible because of the other loop in {#b}Y{/b}
+   *
+   *  Instead, you should usually write :
+   *
+   * ```docx-md
+   * | Head1    | Head2         |
+   * | -------- | ------------  |
+   * | {#a}X    | {#b}Y{/b}{/a} |
+   * ```
+   */
   err.properties = {
     id: "unbalanced_loop_tags",
     explanation: "Unbalanced loop tags {#".concat(lastL, "}{/").concat(lastR, "}{#").concat(l, "}{/").concat(r, "}"),
@@ -9794,6 +10008,17 @@ function getUnbalancedLoopException(pair, lastPair) {
 function getClosingTagNotMatchOpeningTag(_ref3) {
   var tags = _ref3.tags;
   var err = new XTTemplateError("Closing tag does not match opening tag");
+  /*
+   * This error happens if your loop tags are incorrectly closed
+   *
+   * ```docx
+   * {#condition1}
+   * Some text
+   * {/otherCondition}
+   * ```
+   *
+   * Since the start tag does not match the open tag, the template is invalid.
+   */
   err.properties = {
     id: "closing_tag_does_not_match_opening_tag",
     explanation: "The tag \"".concat(tags[0].value, "\" is closed by the tag \"").concat(tags[1].value, "\""),
@@ -9811,6 +10036,21 @@ function getScopeCompilationError(_ref4) {
     rootError = _ref4.rootError,
     offset = _ref4.offset;
   var err = new XTScopeParserError("Scope parser compilation failed");
+  /*
+   * This happens when your parser throws an error during compilation. The
+   * parser is the second argument of the constructor
+   * `new Docxtemplater(zip, {parser: function parser(tag) {}});`
+   *
+   * For example, if your template is:
+   *
+   * ```docx
+   * {name++}
+   * ```
+   *
+   * and you use the angular expression parser, you will have this error. The error
+   * happens when you call parser('name++'); The underlying error can be
+   * read in `e.properties.rootError`
+   */
   err.properties = {
     id: "scopeparser_compilation_failed",
     offset: offset,
@@ -9826,6 +10066,42 @@ function getScopeParserExecutionError(_ref5) {
     error = _ref5.error,
     offset = _ref5.offset;
   var err = new XTScopeParserError("Scope parser execution failed");
+  /*
+   * This happens when your parser throws an error during execution. The
+   * parser is the second argument of the constructor
+   * `new Docxtemplater(zip, {parser: function parser(tag) {}});`
+   *
+   * For example, if your template is:
+   *
+   * ```docx
+   * {test | toFixed}
+   * ```
+   *
+   * and your code is :
+   *
+   * ```js
+   * const expressionParser = require("docxtemplater/expressions.js");
+   * const doc = new Docxtemplater(zip, {
+   *   paragraphLoop: true,
+   *   linebreaks: true,
+   *   parser: expressionParser.configure({
+   *     filters: {
+   *       toFixed(input) {
+   *         return input.toFixed();
+   *       }
+   *     }
+   *   }),
+   * });
+   * doc.render({
+   *   test: false
+   * });
+   * ```
+   *
+   * Since false.toFixed() triggers an error in Javascript, this will then throw an error "Scope parser execution failed".
+   *
+   * You can either fix your data or make your toFixed function more robust
+   * by returning "input" if the input is not a number.
+   */
   err.properties = {
     id: "scopeparser_execution_failed",
     explanation: "The scope parser for the tag ".concat(tag, " failed to execute"),
@@ -9840,6 +10116,22 @@ function getLoopPositionProducesInvalidXMLError(_ref6) {
   var tag = _ref6.tag,
     offset = _ref6.offset;
   var err = new XTTemplateError("The position of the loop tags \"".concat(tag, "\" would produce invalid XML"));
+  /*
+   * This happens when a loop would produce invalid XML.
+   *
+   * For example, if you write:
+   *
+   * ```docx-md
+   * | Head1    | Head2         |
+   * | -------- | ------------  |
+   * | {#users} | content       |
+   *
+   * {/users}
+   * ```
+   *
+   * this is not allowed since a loop that starts in a table must also end
+   * in that table.
+   */
   err.properties = {
     xtag: tag,
     id: "loop_position_invalid",
@@ -9854,6 +10146,11 @@ function throwUnimplementedTagType(part, index) {
     errorMsg += " \"".concat(part.module, "\"");
   }
   var err = new XTTemplateError(errorMsg);
+  /*
+   * This happens when a tag type is not implemented. It should normally not happen,
+   * unless you changed docxtemplater code or created your own module and didn't
+   * implement the `render` function of your module correctly.
+   */
   err.properties = {
     part: part,
     index: index,
@@ -9863,6 +10160,10 @@ function throwUnimplementedTagType(part, index) {
 }
 function throwMalformedXml() {
   var err = new XTInternalError("Malformed xml");
+  /*
+   * This happens when an xml file of the document cannot be parsed
+   * correctly.
+   */
   err.properties = {
     explanation: "The template contains malformed xml",
     id: "malformed_xml"
@@ -9871,6 +10172,13 @@ function throwMalformedXml() {
 }
 function throwResolveBeforeCompile() {
   var err = new XTInternalError("You must run `.compile()` before running `.resolveData()`");
+  /*
+   * This happens if you're calling `resolveData()` before you run `.compile()`.
+   *
+   * You should always call `compile` first and then only `resolveData`
+   *
+   * Or you can migrate to [the constructor with two arguments](/docs/get-started-node/#usage)
+   */
   err.properties = {
     id: "resolve_before_compile",
     explanation: "You must run `.compile()` before running `.resolveData()`"
@@ -9879,6 +10187,9 @@ function throwResolveBeforeCompile() {
 }
 function throwRenderInvalidTemplate() {
   var err = new XTInternalError("You should not call .render on a document that had compilation errors");
+  /*
+   * This happens if you're calling `render()` on a document that had template errors
+   */
   err.properties = {
     id: "render_on_invalid_template",
     explanation: "You should not call .render on a document that had compilation errors"
@@ -9887,6 +10198,11 @@ function throwRenderInvalidTemplate() {
 }
 function throwRenderTwice() {
   var err = new XTInternalError("You should not call .render twice on the same docxtemplater instance");
+  /*
+   * This happens if you're calling `render()` on a document twice.
+   *
+   * You should always create a new docxtemplater instance if you need to create two output documents.
+   */
   err.properties = {
     id: "render_twice",
     explanation: "You should not call .render twice on the same docxtemplater instance"
@@ -9902,6 +10218,13 @@ function throwFileTypeNotIdentified(zip) {
     msg = "Zip file contains : ".concat(files.join(","));
   }
   var err = new XTInternalError("The filetype for this file could not be identified, is this file corrupted ? ".concat(msg));
+  /*
+   * This error happens if you're creating docxtemplater with a zip file, but that file is not recognized as a docx/pptx/xlsx or odt file.
+   *
+   * Note that xlsx files and odt files need a paid module to be templated.
+   *
+   * Other zip files (zip, odp, ods) will trigger the same error.
+   */
   err.properties = {
     id: "filetype_not_identified",
     explanation: "The filetype for this file could not be identified, is this file corrupted ? ".concat(msg)
@@ -9910,6 +10233,13 @@ function throwFileTypeNotIdentified(zip) {
 }
 function throwXmlInvalid(content, offset) {
   var err = new XTTemplateError("An XML file has invalid xml");
+  /*
+   * This error happens if the XML is invalid in your template file.
+   *
+   * This should be very rare except if you were using a tool to preprocess
+   * the template (an XML error in a docx file means that the template file
+   * is already corrupt).
+   */
   err.properties = {
     id: "file_has_invalid_xml",
     content: content,
@@ -9920,6 +10250,10 @@ function throwXmlInvalid(content, offset) {
 }
 function throwFileTypeNotHandled(fileType) {
   var err = new XTInternalError("The filetype \"".concat(fileType, "\" is not handled by docxtemplater"));
+  /*
+   * This error happens if the filetype was recognized (xlsx, odt), but
+   * without the correct module, this file cannot be templated
+   */
   err.properties = {
     id: "filetype_not_handled",
     explanation: "The file you are trying to generate is of type \"".concat(fileType, "\", but only docx and pptx formats are handled"),
@@ -9975,10 +10309,11 @@ function DocXFileTypeConfig() {
     getTemplatedFiles: function getTemplatedFiles() {
       return [];
     },
+    templatedNs: ["http://schemas.microsoft.com/office/2006/coverPageProps"],
     textPath: function textPath(doc) {
       return doc.textTarget;
     },
-    tagsXmlTextArray: ["Company", "HyperlinkBase", "Manager", "cp:category", "cp:keywords", "dc:creator", "dc:description", "dc:subject", "dc:title", "cp:contentStatus", "w:t", "a:t", "m:t", "vt:lpstr", "vt:lpwstr"],
+    tagsXmlTextArray: ["Company", "HyperlinkBase", "Manager", "cp:category", "cp:keywords", "dc:creator", "dc:description", "dc:subject", "dc:title", "cp:contentStatus", "PublishDate", "Abstract", "CompanyAddress", "CompanyPhone", "CompanyFax", "CompanyEmail", "w:t", "a:t", "m:t", "vt:lpstr", "vt:lpwstr"],
     tagsXmlLexedArray: ["w:proofState", "w:tc", "w:tr", "w:tbl", "w:ftr", "w:hdr", "w:body", "w:document", "w:p", "w:r", "w:br", "w:rPr", "w:pPr", "w:spacing", "w:sdtContent", "w:sdt", "w:drawing", "w:sectPr", "w:type", "w:headerReference", "w:footerReference", "w:bookmarkStart", "w:bookmarkEnd", "w:commentRangeStart", "w:commentRangeEnd", "w:commentReference"],
     droppedTagsInsidePlaceholder: ["w:p", "w:br", "w:bookmarkStart", "w:bookmarkEnd"],
     expandTags: [{
@@ -10096,20 +10431,18 @@ function collectContentTypes(overrides, defaults, zip) {
     var partName = override.getAttribute("PartName").substr(1);
     partNames[partName] = contentType;
   }
-  var _loop = function _loop() {
-    var def = defaults[_i4];
-    var contentType = def.getAttribute("ContentType");
-    var extension = def.getAttribute("Extension");
-    zip.file(/./).map(function (_ref) {
-      var name = _ref.name;
+  zip.file(/./).map(function (_ref) {
+    var name = _ref.name;
+    for (var _i4 = 0; _i4 < defaults.length; _i4++) {
+      var def = defaults[_i4];
+      var _contentType = def.getAttribute("ContentType");
+      var extension = def.getAttribute("Extension");
       if (name.slice(name.length - extension.length) === extension && !partNames[name] && name !== ctXML) {
-        partNames[name] = contentType;
+        partNames[name] = _contentType;
       }
-    });
-  };
-  for (var _i4 = 0; _i4 < defaults.length; _i4++) {
-    _loop();
-  }
+    }
+    partNames[name] || (partNames[name] = "");
+  });
   return partNames;
 }
 function getContentTypes(zip) {
@@ -10530,11 +10863,6 @@ function getDelimiterErrors(delimiterMatches, fullText, syntaxOptions) {
           xtag: wordToUtf8(xtag),
           offset: lastDelimiterOffset
         }));
-        lastDelimiterMatch = currDelimiterMatch;
-        delimiterAcc.push(_objectSpread(_objectSpread({}, currDelimiterMatch), {}, {
-          error: true
-        }));
-        return delimiterAcc;
       }
       delimiterAcc.pop();
     }
@@ -10577,9 +10905,8 @@ function getDelimiterErrors(delimiterMatches, fullText, syntaxOptions) {
         xtag: wordToUtf8(xtag),
         offset: lastDelimiterOffset
       }));
-    } else {
-      delimiterWithErrors.pop();
     }
+    delimiterWithErrors.pop();
   }
   return {
     delimiterWithErrors: delimiterWithErrors,
@@ -11186,24 +11513,24 @@ function identity(i) {
 }
 module.exports = function (module) {
   var defaults = {
+    on: emptyFun,
     set: emptyFun,
+    getFileType: emptyFun,
+    optionsTransformer: identity,
+    preparse: identity,
     matchers: function matchers() {
       return [];
     },
     parse: emptyFun,
-    render: emptyFun,
     getTraits: emptyFun,
-    getFileType: emptyFun,
-    nullGetter: emptyFun,
-    optionsTransformer: identity,
-    postrender: identity,
-    errorsTransformer: identity,
-    getRenderedMap: identity,
-    preparse: identity,
     postparse: identity,
-    on: emptyFun,
+    errorsTransformer: identity,
+    preResolve: emptyFun,
     resolve: emptyFun,
-    preResolve: emptyFun
+    getRenderedMap: identity,
+    render: emptyFun,
+    nullGetter: emptyFun,
+    postrender: identity
   };
   if (Object.keys(defaults).every(function (key) {
     return !module[key];
@@ -11285,7 +11612,7 @@ var Common = /*#__PURE__*/function () {
           }
         }
         if (ftCandidate) {
-          return ftCandidate;
+          continue;
         }
       }
       return ftCandidate;
@@ -11299,6 +11626,7 @@ module.exports = function () {
 "use strict";
 
 function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function (o) { return typeof o; } : function (o) { return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o; }, _typeof(o); }
+function _readOnlyError(r) { throw new TypeError('"' + r + '" is read-only'); }
 function _classCallCheck(a, n) { if (!(a instanceof n)) throw new TypeError("Cannot call a class as a function"); }
 function _defineProperties(e, r) { for (var t = 0; t < r.length; t++) { var o = r[t]; o.enumerable = o.enumerable || !1, o.configurable = !0, "value" in o && (o.writable = !0), Object.defineProperty(e, _toPropertyKey(o.key), o); } }
 function _createClass(e, r, t) { return r && _defineProperties(e.prototype, r), t && _defineProperties(e, t), Object.defineProperty(e, "prototype", { writable: !1 }), e; }
@@ -11452,12 +11780,12 @@ var ExpandPairTrait = /*#__PURE__*/function () {
     }
   }, {
     key: "postparse",
-    value: function postparse(postparsed, _ref) {
+    value: function postparse(postparsed, options) {
       var _this = this;
-      var getTraits = _ref.getTraits,
-        _postparse = _ref.postparse,
-        fileType = _ref.fileType;
-      var traits = getTraits(traitName, postparsed);
+      var getTraits = options.getTraits,
+        postparse = options.postparse,
+        fileType = options.fileType;
+      var traits = getTraits(traitName, postparsed, options);
       traits = traits.map(function (trait) {
         return trait || [];
       });
@@ -11535,7 +11863,7 @@ var ExpandPairTrait = /*#__PURE__*/function () {
         if (expandedPair[1] === i) {
           // End pair
           var basePart = postparsed[pair[0].offset];
-          basePart.subparsed = _postparse(innerParts, {
+          basePart.subparsed = postparse(innerParts, {
             basePart: basePart
           });
           basePart.endLindex = pair[1].part.lIndex;
@@ -11602,13 +11930,17 @@ var filetypes = require("../filetypes.js");
 var wrapper = require("../module-wrapper.js");
 var moduleName = "loop";
 function hasContent(parts) {
-  return parts.some(function (part) {
-    return isContent(part);
-  });
+  for (var _i2 = 0; _i2 < parts.length; _i2++) {
+    var part = parts[_i2];
+    if (isContent(part)) {
+      return true;
+    }
+  }
+  return false;
 }
 function getFirstMeaningFulPart(parsed) {
-  for (var _i2 = 0; _i2 < parsed.length; _i2++) {
-    var part = parsed[_i2];
+  for (var _i4 = 0; _i4 < parsed.length; _i4++) {
+    var part = parsed[_i4];
     if (part.type !== "content") {
       return part;
     }
@@ -11640,72 +11972,92 @@ function addPageBreakAtBeginning(subRendered) {
   subRendered.parts.unshift('<w:p><w:r><w:br w:type="page"/></w:r></w:p>');
 }
 function isContinuous(parts) {
-  return parts.some(function (part) {
-    return isTagStart("w:type", part) && part.value.indexOf("continuous") !== -1;
-  });
+  for (var _i6 = 0; _i6 < parts.length; _i6++) {
+    var part = parts[_i6];
+    if (isTagStart("w:type", part) && part.value.indexOf("continuous") !== -1) {
+      return true;
+    }
+  }
+  return false;
 }
 function isNextPage(parts) {
-  return parts.some(function (part) {
-    return isTagStart("w:type", part) && part.value.indexOf('w:val="nextPage"') !== -1;
-  });
+  for (var _i8 = 0; _i8 < parts.length; _i8++) {
+    var part = parts[_i8];
+    if (isTagStart("w:type", part) && part.value.indexOf('w:val="nextPage"') !== -1) {
+      return true;
+    }
+  }
+  return false;
 }
 function addSectionBefore(parts, sect) {
-  return pushArray(["<w:p><w:pPr>".concat(sect.map(function (_ref) {
+  parts.unshift("<w:p><w:pPr>".concat(sect.map(function (_ref) {
     var value = _ref.value;
     return value;
-  }).join(""), "</w:pPr></w:p>")], parts);
+  }).join(""), "</w:pPr></w:p>"));
 }
 function addContinuousType(parts) {
   var stop = false;
   var inSectPr = false;
-  var result = [];
-  for (var _i4 = 0; _i4 < parts.length; _i4++) {
-    var part = parts[_i4];
-    if (stop === false && startsWith(part, "<w:sectPr")) {
+  for (var i = 0; i < parts.length; i++) {
+    var part = parts[i];
+    if (!stop && startsWith(part, "<w:sectPr")) {
       inSectPr = true;
     }
     if (inSectPr) {
       if (startsWith(part, "<w:type")) {
         stop = true;
       }
-      if (stop === false && startsWith(part, "</w:sectPr")) {
-        result.push('<w:type w:val="continuous"/>');
+      if (!stop && startsWith(part, "</w:sectPr")) {
+        parts.splice(i, 0, '<w:type w:val="continuous"/>');
+        i++; // Skip re-processing the now-shifted closing tag to avoid infinite insertion
       }
     }
-    result.push(part);
   }
-  return result;
+  return parts;
 }
 function dropHeaderFooterRefs(parts) {
-  return parts.filter(function (text) {
-    return !startsWith(text, "<w:headerReference") && !startsWith(text, "<w:footerReference");
-  });
+  var writeIndex = 0;
+  for (var readIndex = 0; readIndex < parts.length; readIndex++) {
+    if (!startsWith(parts[readIndex], "<w:headerReference") && !startsWith(parts[readIndex], "<w:footerReference")) {
+      parts[writeIndex] = parts[readIndex];
+      writeIndex++;
+    }
+  }
+  parts.length = writeIndex;
+  return parts;
 }
 function hasPageBreak(chunk) {
-  return chunk.some(function (part) {
-    return part.tag === "w:br" && part.value.indexOf('w:type="page"') !== -1;
-  });
+  for (var _i0 = 0; _i0 < chunk.length; _i0++) {
+    var part = chunk[_i0];
+    if (part.tag === "w:br" && part.value.indexOf('w:type="page"') !== -1) {
+      return true;
+    }
+  }
+  return false;
 }
 function hasImage(chunk) {
-  return chunk.some(function (_ref2) {
-    var tag = _ref2.tag;
-    return tag === "w:drawing";
-  });
+  for (var _i10 = 0; _i10 < chunk.length; _i10++) {
+    var el = chunk[_i10];
+    if (el.tag === "w:drawing") {
+      return true;
+    }
+  }
+  return false;
 }
 function getSectPr(chunks) {
-  var collectSectPr = false;
   var sectPrs = [];
-  for (var _i6 = 0; _i6 < chunks.length; _i6++) {
-    var part = chunks[_i6];
+  var currentSectPr = null;
+  for (var _i12 = 0; _i12 < chunks.length; _i12++) {
+    var part = chunks[_i12];
     if (isTagStart("w:sectPr", part)) {
-      sectPrs.push([]);
-      collectSectPr = true;
+      currentSectPr = [];
+      sectPrs.push(currentSectPr);
     }
-    if (collectSectPr) {
-      sectPrs[sectPrs.length - 1].push(part);
+    if (currentSectPr !== null) {
+      currentSectPr.push(part);
     }
     if (isTagEnd("w:sectPr", part)) {
-      collectSectPr = false;
+      currentSectPr = null;
     }
   }
   return sectPrs;
@@ -11713,8 +12065,8 @@ function getSectPr(chunks) {
 function getSectPrHeaderFooterChangeCount(chunks) {
   var collectSectPr = false;
   var sectPrCount = 0;
-  for (var _i8 = 0; _i8 < chunks.length; _i8++) {
-    var part = chunks[_i8];
+  for (var _i14 = 0; _i14 < chunks.length; _i14++) {
+    var part = chunks[_i14];
     if (isTagStart("w:sectPr", part)) {
       collectSectPr = true;
     }
@@ -11735,6 +12087,12 @@ function getLastSectPr(parsed) {
   var inSectPr = false;
   for (var i = parsed.length - 1; i >= 0; i--) {
     var part = parsed[i];
+
+    /*
+     * Since we try to get the last sectPr, we traverse the parsed array
+     * from the end to beginning, this is why inSectPr becomes true when we
+     * we see a </w:sectPr> closing tag
+     */
     if (isTagEnd("w:sectPr", part)) {
       inSectPr = true;
     }
@@ -11775,8 +12133,8 @@ var LoopModule = /*#__PURE__*/function () {
     }
   }, {
     key: "preparse",
-    value: function preparse(parsed, _ref3) {
-      var contentType = _ref3.contentType;
+    value: function preparse(parsed, _ref2) {
+      var contentType = _ref2.contentType;
       if (filetypes.main.indexOf(contentType) !== -1) {
         this.sects = getSectPr(parsed);
       }
@@ -11795,10 +12153,10 @@ var LoopModule = /*#__PURE__*/function () {
         inverted: true
       }], [this.prefix.end, module, {
         location: "end"
-      }], [this.prefix.dash, module, function (_ref4) {
-        var _ref5 = _slicedToArray(_ref4, 3),
-          expandTo = _ref5[1],
-          value = _ref5[2];
+      }], [this.prefix.dash, module, function (_ref3) {
+        var _ref4 = _slicedToArray(_ref3, 3),
+          expandTo = _ref4[1],
+          value = _ref4[2];
         return {
           location: "start",
           inverted: false,
@@ -11828,20 +12186,23 @@ var LoopModule = /*#__PURE__*/function () {
       }
       return tags;
     }
+
+    /* eslint-disable-next-line complexity */
   }, {
     key: "postparse",
-    value: function postparse(parsed, _ref6) {
-      var basePart = _ref6.basePart;
+    value: function postparse(parsed, _ref5) {
+      var basePart = _ref5.basePart;
       if (basePart && this.docxtemplater.fileType === "docx" && parsed.length > 0) {
         basePart.sectPrCount = getSectPrHeaderFooterChangeCount(parsed);
         this.totalSectPr += basePart.sectPrCount;
         var sects = this.sects;
-        sects.some(function (sect, index) {
+        for (var index = 0, len = sects.length; index < len; index++) {
+          var sect = sects[index];
           if (basePart.lIndex < sect[0].lIndex) {
             if (index + 1 < sects.length && isContinuous(sects[index + 1])) {
               basePart.addContinuousType = true;
             }
-            return true;
+            break;
           }
           if (parsed[0].lIndex < sect[0].lIndex && sect[0].lIndex < basePart.lIndex) {
             if (isNextPage(sects[index])) {
@@ -11849,9 +12210,9 @@ var LoopModule = /*#__PURE__*/function () {
                 index: index
               };
             }
-            return true;
+            break;
           }
-        });
+        }
         basePart.lastParagrapSectPr = getLastSectPr(parsed);
       }
       if (!basePart || basePart.expandTo !== "auto" || basePart.module !== moduleName || !isEnclosedByParagraphs(parsed)) {
@@ -11891,6 +12252,7 @@ var LoopModule = /*#__PURE__*/function () {
   }, {
     key: "resolve",
     value: function resolve(part, options) {
+      var self = this;
       if (!isModule(part, moduleName)) {
         return null;
       }
@@ -11899,58 +12261,70 @@ var LoopModule = /*#__PURE__*/function () {
         part: part
       });
       var promises = [];
+      var lastPromise;
+      if (self.resolveSerially) {
+        lastPromise = Promise.resolve(null);
+      }
       function loopOver(scope, i, length) {
         var scopeManager = sm.createSubScopeManager(scope, part.value, i, part, length);
-        promises.push(options.resolve(_objectSpread(_objectSpread({}, options), {}, {
-          compiled: part.subparsed,
-          tags: {},
-          scopeManager: scopeManager
-        })));
+        if (self.resolveSerially) {
+          lastPromise = lastPromise.then(function () {
+            return options.resolve(_objectSpread(_objectSpread({}, options), {}, {
+              compiled: part.subparsed,
+              tags: {},
+              scopeManager: scopeManager
+            }));
+          });
+          promises.push(lastPromise);
+        } else {
+          promises.push(options.resolve(_objectSpread(_objectSpread({}, options), {}, {
+            compiled: part.subparsed,
+            tags: {},
+            scopeManager: scopeManager
+          })));
+        }
       }
       var errorList = [];
       return promisedValue.then(function (values) {
         values !== null && values !== void 0 ? values : values = options.nullGetter(part);
-        return new Promise(function (resolve) {
-          if (values instanceof Promise) {
-            return values.then(function (values) {
-              if (values instanceof Array) {
-                Promise.all(values).then(resolve);
-              } else {
-                resolve(values);
-              }
-            });
-          }
-          if (values instanceof Array) {
-            Promise.all(values).then(resolve);
-          } else {
-            resolve(values);
-          }
-        }).then(function (values) {
-          sm.loopOverValue(values, loopOver, part.inverted);
-          return Promise.all(promises).then(function (r) {
-            return r.map(function (_ref7) {
-              var resolved = _ref7.resolved,
-                errors = _ref7.errors;
-              pushArray(errorList, errors);
-              return resolved;
-            });
-          }).then(function (value) {
-            if (errorList.length > 0) {
-              throw errorList;
+        if (values instanceof Promise) {
+          return values.then(function (values) {
+            if (values instanceof Array) {
+              return Promise.all(values);
             }
-            return value;
+            return values;
           });
+        }
+        if (values instanceof Array) {
+          return Promise.all(values);
+        }
+        return values;
+      }).then(function (values) {
+        sm.loopOverValue(values, loopOver, part.inverted);
+        return Promise.all(promises).then(function (r) {
+          return r.map(function (_ref6) {
+            var resolved = _ref6.resolved,
+              errors = _ref6.errors;
+            pushArray(errorList, errors);
+            return resolved;
+          });
+        }).then(function (value) {
+          if (errorList.length > 0) {
+            throw errorList;
+          }
+          return value;
         });
       });
     }
   }, {
     key: "render",
     value: function render(part, options) {
+      var self = this;
       if (part.tag === "p:xfrm") {
-        this.inXfrm = part.position === "start";
+        self.inXfrm = part.position === "start";
       }
-      if (part.tag === "a:ext" && this.inXfrm) {
-        this.lastExt = part;
+      if (part.tag === "a:ext" && self.inXfrm) {
+        self.lastExt = part;
         return part;
       }
       if (!isModule(part, moduleName)) {
@@ -11959,7 +12333,6 @@ var LoopModule = /*#__PURE__*/function () {
       var totalValue = [];
       var errors = [];
       var heightOffset = 0;
-      var self = this;
       var firstTag = part.subparsed[0];
       var tagHeight = 0;
       if ((firstTag === null || firstTag === void 0 ? void 0 : firstTag.tag) === "a:tr") {
@@ -11971,8 +12344,8 @@ var LoopModule = /*#__PURE__*/function () {
       function loopOver(scope, i, length) {
         heightOffset += tagHeight;
         var scopeManager = options.scopeManager.createSubScopeManager(scope, part.value, i, part, length);
-        for (var _i0 = 0, _part$subparsed2 = part.subparsed; _i0 < _part$subparsed2.length; _i0++) {
-          var pp = _part$subparsed2[_i0];
+        for (var _i16 = 0, _part$subparsed2 = part.subparsed; _i16 < _part$subparsed2.length; _i16++) {
+          var pp = _part$subparsed2[_i16];
           if (isTagStart("a16:rowId", pp)) {
             var val = +getSingleAttribute(pp.value, "val") + a16RowIdOffset;
             a16RowIdOffset = 1;
@@ -11998,7 +12371,7 @@ var LoopModule = /*#__PURE__*/function () {
             subRendered.parts = addContinuousType(subRendered.parts);
           }
         } else if (part.addNextPage) {
-          subRendered.parts = addSectionBefore(subRendered.parts, self.sects[part.addNextPage.index]);
+          addSectionBefore(subRendered.parts, self.sects[part.addNextPage.index]);
         }
         if (part.addNextPage) {
           addPageBreakAtEnd(subRendered);
@@ -12006,8 +12379,8 @@ var LoopModule = /*#__PURE__*/function () {
         if (part.hasPageBreakBeginning && insideParagraphLoop) {
           addPageBreakAtBeginning(subRendered);
         }
-        for (var _i10 = 0, _subRendered$parts2 = subRendered.parts; _i10 < _subRendered$parts2.length; _i10++) {
-          var _val = _subRendered$parts2[_i10];
+        for (var _i18 = 0, _subRendered$parts2 = subRendered.parts; _i18 < _subRendered$parts2.length; _i18++) {
+          var _val = _subRendered$parts2[_i18];
           totalValue.push(_val);
         }
         pushArray(errors, subRendered.errors);
@@ -12035,12 +12408,12 @@ var LoopModule = /*#__PURE__*/function () {
         };
       }
       if (heightOffset !== 0) {
-        var cy = +getSingleAttribute(this.lastExt.value, "cy");
+        var cy = +getSingleAttribute(self.lastExt.value, "cy");
         /*
          * We do edit the value of a previous result here
          * #edit-value-backwards
          */
-        this.lastExt.value = setSingleAttribute(this.lastExt.value, "cy", cy + heightOffset);
+        self.lastExt.value = setSingleAttribute(self.lastExt.value, "cy", cy + heightOffset);
       }
       return {
         value: options.joinUncorrupt(totalValue, _objectSpread(_objectSpread({}, options), {}, {
@@ -12065,7 +12438,8 @@ function _toPropertyKey(t) { var i = _toPrimitive(t, "string"); return "symbol" 
 function _toPrimitive(t, r) { if ("object" != _typeof(t) || !t) return t; var e = t[Symbol.toPrimitive]; if (void 0 !== e) { var i = e.call(t, r || "default"); if ("object" != _typeof(i)) return i; throw new TypeError("@@toPrimitive must return a primitive value."); } return ("string" === r ? String : Number)(t); }
 var traits = require("../traits.js");
 var _require = require("../doc-utils.js"),
-  isContent = _require.isContent;
+  isContent = _require.isContent,
+  getPartWithDelimiters = _require.getPartWithDelimiters;
 var _require2 = require("../errors.js"),
   throwRawTagShouldBeOnlyTextInParagraph = _require2.throwRawTagShouldBeOnlyTextInParagraph,
   getInvalidRawXMLValueException = _require2.getInvalidRawXMLValueException;
@@ -12112,6 +12486,7 @@ var RawXmlModule = /*#__PURE__*/function () {
   }, {
     key: "postparse",
     value: function postparse(postparsed) {
+      var _this = this;
       return traits.expandToOne(postparsed, {
         moduleName: moduleName,
         getInner: getInner,
@@ -12120,7 +12495,7 @@ var RawXmlModule = /*#__PURE__*/function () {
           message: "Raw tag not in paragraph",
           id: "raw_tag_outerxml_invalid",
           explanation: function explanation(part) {
-            return "The tag \"".concat(part.value, "\" is not inside a paragraph, putting raw tags inside an inline loop is disallowed.");
+            return "The tag \"".concat(getPartWithDelimiters(part, _this.docxtemplater), "\" is not inside a paragraph, putting raw tags inside an inline loop is disallowed.");
           }
         }
       });
@@ -12154,6 +12529,8 @@ var RawXmlModule = /*#__PURE__*/function () {
         errors: [getInvalidRawXMLValueException({
           tag: part.value,
           value: value,
+          partDelims: getPartWithDelimiters(part, this.docxtemplater),
+          part: part,
           offset: part.offset
         })]
       };
@@ -12198,16 +12575,6 @@ var Render = /*#__PURE__*/function () {
     this.recordedRun = [];
   }
   return _createClass(Render, [{
-    key: "optionsTransformer",
-    value: function optionsTransformer(options, docxtemplater) {
-      this.docxtemplater = docxtemplater;
-      this.brTag = docxtemplater.fileType === "docx" ? "<w:r><w:br/></w:r>" : "<a:br/>";
-      this.prefix = ftprefix[docxtemplater.fileType];
-      this.runStartTag = "".concat(this.prefix, ":r");
-      this.runPropsStartTag = "".concat(this.prefix, ":rPr");
-      return options;
-    }
-  }, {
     key: "set",
     value: function set(obj) {
       if (obj.compiled) {
@@ -12218,15 +12585,14 @@ var Render = /*#__PURE__*/function () {
       }
     }
   }, {
-    key: "getRenderedMap",
-    value: function getRenderedMap(mapper) {
-      for (var from in this.compiled) {
-        mapper[from] = {
-          from: from,
-          data: this.data
-        };
-      }
-      return mapper;
+    key: "optionsTransformer",
+    value: function optionsTransformer(options, docxtemplater) {
+      this.docxtemplater = docxtemplater;
+      this.brTag = docxtemplater.fileType === "docx" ? "<w:r><w:br/></w:r>" : "<a:br/>";
+      this.prefix = ftprefix[docxtemplater.fileType];
+      this.runStartTag = "".concat(this.prefix, ":r");
+      this.runPropsStartTag = "".concat(this.prefix, ":rPr");
+      return options;
     }
   }, {
     key: "postparse",
@@ -12253,6 +12619,17 @@ var Render = /*#__PURE__*/function () {
         postparsed: postparsed,
         errors: errors
       };
+    }
+  }, {
+    key: "getRenderedMap",
+    value: function getRenderedMap(mapper) {
+      for (var from in this.compiled) {
+        mapper[from] = {
+          from: from,
+          data: this.data
+        };
+      }
+      return mapper;
     }
   }, {
     key: "render",
@@ -12470,7 +12847,9 @@ function _iterableToArrayLimit(r, l) { var t = null == r ? null : "undefined" !=
 function _arrayWithHoles(r) { if (Array.isArray(r)) return r; }
 var _require = require("./doc-utils.js"),
   wordToUtf8 = _require.wordToUtf8,
-  pushArray = _require.pushArray;
+  pushArray = _require.pushArray,
+  isParagraphStart = _require.isParagraphStart,
+  isBreakTag = _require.isBreakTag;
 var _require2 = require("./prefix-matcher.js"),
   match = _require2.match,
   getValue = _require2.getValue,
@@ -12611,6 +12990,9 @@ var parser = {
         return parsed;
       }
       if (token.type !== "content" || token.position !== "insidetag") {
+        if (options.syntax.preserveNewlinesInTags && (isBreakTag(token) || isParagraphStart(token))) {
+          placeHolderContent += "\n";
+        }
         if (droppedTags.indexOf(token.tag) !== -1) {
           return parsed;
         }
@@ -12622,17 +13004,20 @@ var parser = {
     }, []);
   },
   postparse: function postparse(postparsed, modules, options) {
-    function getTraits(traitName, postparsed) {
-      return modules.map(function (module) {
-        return module.getTraits(traitName, postparsed);
-      });
+    function getTraits(traitName, postparsed, options) {
+      var result = [];
+      for (var _i10 = 0; _i10 < modules.length; _i10++) {
+        var _module5 = modules[_i10];
+        result.push(_module5.getTraits(traitName, postparsed, options));
+      }
+      return result;
     }
     var errors = [];
     function _postparse(postparsed, options) {
       var newPostparsed = postparsed;
-      for (var _i10 = 0; _i10 < modules.length; _i10++) {
-        var _module5 = modules[_i10];
-        var postparseResult = _module5.postparse(newPostparsed, _objectSpread(_objectSpread({}, options), {}, {
+      for (var _i12 = 0; _i12 < modules.length; _i12++) {
+        var _module6 = modules[_i12];
+        var postparseResult = _module6.postparse(newPostparsed, _objectSpread(_objectSpread({}, options), {}, {
           postparse: function postparse(parsed, opts) {
             return _postparse(parsed, _objectSpread(_objectSpread({}, options), opts));
           },
@@ -12916,56 +13301,93 @@ function moduleResolve(part, options) {
   }
   return false;
 }
-function resolve(options) {
-  var resolved = [];
-  var baseNullGetter = options.baseNullGetter;
-  var compiled = options.compiled,
-    scopeManager = options.scopeManager;
-  options.nullGetter = function (part, sm) {
-    return baseNullGetter(part, sm || scopeManager);
-  };
-  options.resolved = resolved;
-  var errors = [];
-  return Promise.all(compiled.filter(function (part) {
-    return ["content", "tag"].indexOf(part.type) === -1;
-  }).reduce(function (promises, part) {
-    var moduleResolved = moduleResolve(part, _objectSpread(_objectSpread({}, options), {}, {
-      resolvedId: getResolvedId(part, options)
-    }));
-    var result;
-    if (moduleResolved) {
-      result = moduleResolved.then(function (value) {
-        resolved.push({
-          tag: part.value,
-          lIndex: part.lIndex,
-          value: value
-        });
+function resolvePart(part, resolved, errors, options) {
+  var moduleResolved = moduleResolve(part, _objectSpread(_objectSpread({}, options), {}, {
+    resolvedId: getResolvedId(part, options)
+  }));
+  if (moduleResolved) {
+    return moduleResolved.then(function (value) {
+      resolved.push({
+        tag: part.value,
+        lIndex: part.lIndex,
+        value: value
       });
-    } else if (part.type === "placeholder") {
-      result = scopeManager.getValueAsync(part.value, {
-        part: part
-      }).then(function (value) {
-        return value == null ? options.nullGetter(part) : value;
-      }).then(function (value) {
-        resolved.push({
-          tag: part.value,
-          lIndex: part.lIndex,
-          value: value
-        });
-        return value;
-      });
-    } else {
-      return;
-    }
-    promises.push(result["catch"](function (e) {
+    })["catch"](function (e) {
       if (e instanceof Array) {
         pushArray(errors, e);
       } else {
         errors.push(e);
       }
-    }));
-    return promises;
-  }, [])).then(function () {
+    });
+  }
+  if (part.type === "placeholder") {
+    return options.scopeManager.getValueAsync(part.value, {
+      part: part
+    }).then(function (value) {
+      return value == null ? options.nullGetter(part) : value;
+    }).then(function (value) {
+      resolved.push({
+        tag: part.value,
+        lIndex: part.lIndex,
+        value: value
+      });
+    })["catch"](function (e) {
+      if (e instanceof Array) {
+        pushArray(errors, e);
+      } else {
+        errors.push(e);
+      }
+    });
+  }
+}
+function resolve(options) {
+  var resolved = [];
+  var errors = [];
+  var baseNullGetter = options.baseNullGetter;
+  var scopeManager = options.scopeManager;
+  options.nullGetter = function (part, sm) {
+    return baseNullGetter(part, sm || scopeManager);
+  };
+  options.resolved = resolved;
+  var p = resolveSerial(options, errors, resolved);
+  if (p) {
+    return p.then(function () {
+      return resolveParallel(options, errors, resolved);
+    });
+  }
+  return resolveParallel(options, errors, resolved);
+}
+function resolveSerial(options, errors, resolved) {
+  var p = null;
+  var _loop = function _loop() {
+    var part = _options$compiled2[_i4];
+    if (["content", "tag"].indexOf(part.type) !== -1) {
+      return 1; // continue
+    }
+    if (part.resolveFirst) {
+      p !== null && p !== void 0 ? p : p = Promise.resolve(null);
+      p = p.then(function () {
+        return resolvePart(part, resolved, errors, options);
+      });
+    }
+  };
+  for (var _i4 = 0, _options$compiled2 = options.compiled; _i4 < _options$compiled2.length; _i4++) {
+    if (_loop()) continue;
+  }
+  return p;
+}
+function resolveParallel(options, errors, resolved) {
+  var promises = [];
+  for (var _i6 = 0, _options$compiled4 = options.compiled; _i6 < _options$compiled4.length; _i6++) {
+    var part = _options$compiled4[_i6];
+    if (["content", "tag"].indexOf(part.type) !== -1) {
+      continue;
+    }
+    if (!part.resolveFirst) {
+      promises.push(resolvePart(part, resolved, errors, options));
+    }
+  }
+  return Promise.all(promises).then(function () {
     return {
       errors: errors,
       resolved: resolved
@@ -13002,6 +13424,7 @@ function find(list, fn) {
 function _getValue(tag, meta, num) {
   var _this = this;
   var scope = this.scopeList[num];
+  var lastScope = this.scopeList[this.scopeList.length - 1];
   if (this.root.finishedResolving) {
     var w = this.resolved;
     var _loop = function _loop() {
@@ -13047,11 +13470,24 @@ function _getValue(tag, meta, num) {
   if (result == null && num > 0) {
     return _getValue.call(this, tag, meta, num - 1);
   }
+  if (typeof result === "function") {
+    try {
+      result = result(lastScope, this);
+    } catch (error) {
+      throw getScopeParserExecutionError({
+        tag: tag,
+        scope: scope,
+        error: error,
+        offset: meta.part.offset
+      });
+    }
+  }
   return result;
 }
 function _getValueAsync(tag, meta, num) {
   var _this2 = this;
   var scope = this.scopeList[num];
+  var lastScope = this.scopeList[this.scopeList.length - 1];
   // search in the scopes (in reverse order) and keep the first defined value
   var parser;
   if (!this.cachedParsers || !meta.part) {
@@ -13079,6 +13515,20 @@ function _getValueAsync(tag, meta, num) {
   }).then(function (result) {
     if (result == null && num > 0) {
       return _getValueAsync.call(_this2, tag, meta, num - 1);
+    }
+    return result;
+  }).then(function (result) {
+    if (typeof result === "function") {
+      try {
+        result = result(lastScope, _this2);
+      } catch (error) {
+        throw getScopeParserExecutionError({
+          tag: tag,
+          scope: scope,
+          error: error,
+          offset: meta.part.offset
+        });
+      }
     }
     return result;
   });
@@ -13145,21 +13595,12 @@ var ScopeManager = /*#__PURE__*/function () {
     key: "getValue",
     value: function getValue(tag, meta) {
       var result = _getValue.call(this, tag, meta, this.scopeList.length - 1);
-      if (typeof result === "function") {
-        return result(this.scopeList[this.scopeList.length - 1], this);
-      }
       return result;
     }
   }, {
     key: "getValueAsync",
     value: function getValueAsync(tag, meta) {
-      var _this3 = this;
-      return _getValueAsync.call(this, tag, meta, this.scopeList.length - 1).then(function (result) {
-        if (typeof result === "function") {
-          return result(_this3.scopeList[_this3.scopeList.length - 1], _this3);
-        }
-        return result;
-      });
+      return _getValueAsync.call(this, tag, meta, this.scopeList.length - 1);
     }
   }, {
     key: "getContext",
@@ -13369,22 +13810,7 @@ function has(name, xmlElements) {
   return false;
 }
 function getExpandToDefault(postparsed, pair, expandTags) {
-  var parts = postparsed.slice(pair[0].offset, pair[1].offset);
-  var xmlElements = getListXmlElements(parts);
-  var closingTagCount = xmlElements.filter(function (tag) {
-    return tag[1] === "/";
-  }).length;
-  var startingTagCount = xmlElements.filter(function (tag) {
-    return tag[1] !== "/" && tag[tag.length - 2] !== "/";
-  }).length;
-  if (closingTagCount !== startingTagCount) {
-    return {
-      error: getLoopPositionProducesInvalidXMLError({
-        tag: first(pair).part.value,
-        offset: [first(pair).part.offset, last(pair).part.offset]
-      })
-    };
-  }
+  var xmlElements = getListXmlElements(postparsed.slice(pair[0].offset, pair[1].offset));
   var _loop = function _loop() {
       var _expandTags$_i = expandTags[_i6],
         contains = _expandTags$_i.contains,
@@ -13397,7 +13823,8 @@ function getExpandToDefault(postparsed, pair, expandTags) {
           if (left === null || right === null) {
             return 0; // continue
           }
-          var chunks = chunkBy(postparsed.slice(left, right), function (p) {
+          var subparsed = postparsed.slice(left, right);
+          var chunks = chunkBy(subparsed, function (p) {
             return isTagStart(contains, p) ? "start" : isTagEnd(contains, p) ? "end" : null;
           });
           var firstChunk = first(chunks);
@@ -13407,6 +13834,32 @@ function getExpandToDefault(postparsed, pair, expandTags) {
           if (firstContent.length !== 1 || lastContent.length !== 1) {
             return 0; // continue
           }
+        }
+        var structured = getStructuredTagPositions(xmlElements);
+        var openCount = 0;
+        for (var _i8 = 0; _i8 < structured.length; _i8++) {
+          var _structured$_i = structured[_i8],
+            tag = _structured$_i.tag,
+            position = _structured$_i.position;
+          if (tag === expand) {
+            if (position === "start") {
+              openCount++;
+            }
+            if (position === "end") {
+              openCount--;
+            }
+          }
+        }
+        if (openCount !== 0) {
+          // Tested by #regression-loop-with-field-and-nofield
+          return {
+            v: {
+              error: getLoopPositionProducesInvalidXMLError({
+                tag: first(pair).part.value,
+                offset: [first(pair).part.offset, last(pair).part.offset]
+              })
+            }
+          };
         }
         return {
           v: {
@@ -13421,7 +13874,46 @@ function getExpandToDefault(postparsed, pair, expandTags) {
     if (_ret === 0) continue;
     if (_ret) return _ret.v;
   }
+  if (!checkStartEnd(xmlElements)) {
+    return {
+      error: getLoopPositionProducesInvalidXMLError({
+        tag: first(pair).part.value,
+        offset: [first(pair).part.offset, last(pair).part.offset]
+      })
+    };
+  }
   return {};
+}
+function getStructuredTagPositions(xmlElements) {
+  var result = [];
+  for (var _i0 = 0; _i0 < xmlElements.length; _i0++) {
+    var el = xmlElements[_i0];
+    var tag = getTagName(el);
+    var position = /^\s*<\//.test(el) ? "end" : "start";
+    result.push({
+      tag: tag,
+      position: position
+    });
+  }
+  return result;
+}
+function getTagName(tag) {
+  return tag.replace(/^\s*<\/?([a-zA-Z:]+).*/, "$1");
+}
+function checkStartEnd(xmlElements) {
+  if (xmlElements.length % 2 === 1) {
+    return false;
+  }
+  for (var i = 0, len = xmlElements.length / 2; i < len; i++) {
+    var start = xmlElements[i];
+    var end = xmlElements[xmlElements.length - i - 1];
+    var tagNameStart = getTagName(start);
+    var tagNameEnd = getTagName(end);
+    if (tagNameStart !== tagNameEnd) {
+      return false;
+    }
+  }
+  return true;
 }
 function getExpandLimit(part, index, postparsed, options) {
   var expandTo = part.expandTo || options.expandTo;
@@ -13526,10 +14018,10 @@ function expandToOne(postparsed, options) {
   });
   var maxRight = -1;
   var offset = 0;
-  for (var _i7 = 0, _len = limits.length; _i7 < _len; _i7++) {
+  for (var _i1 = 0, _len = limits.length; _i1 < _len; _i1++) {
     var _postparsed;
-    var _limit2 = limits[_i7];
-    maxRight = Math.max(maxRight, _i7 > 0 ? limits[_i7 - 1].right : 0);
+    var _limit2 = limits[_i1];
+    maxRight = Math.max(maxRight, _i1 > 0 ? limits[_i1 - 1].right : 0);
     if (_limit2.left < maxRight) {
       continue;
     }
@@ -13823,6 +14315,7 @@ module.exports = /*#__PURE__*/function () {
         relsType: this.relsType,
         baseNullGetter: this.baseNullGetter.bind(this),
         filePath: this.filePath,
+        syntax: this.syntax,
         fileTypeConfig: this.fileTypeConfig,
         fileType: this.fileType,
         linebreaks: this.linebreaks,
